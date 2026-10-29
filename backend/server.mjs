@@ -8,7 +8,11 @@ import { ethers } from 'ethers';
 import { rateLimit } from 'express-rate-limit';
 import mongoose from 'mongoose';
 import Voter from './models/Voter.mjs';
-
+import User from './models/User.js';
+import authRoutes from './routes/auth.js';
+import adminRoutes from './routes/admin.js';
+import electionRoutes from './routes/elections.js';
+import authenticateToken from './middleware/auth.js';
 const AMOY_CHAIN_ID = 80002n;
 const CONTRACT_ABI = [
   'function castVote(bytes32 tokenHash, uint256 candidateId) external',
@@ -32,8 +36,9 @@ function getConfig() {
   const contractAddress = requiredEnv('CONTRACT_ADDRESS');
   if (!ethers.isAddress(contractAddress)) {
     throw new Error('CONTRACT_ADDRESS must be a valid EVM address.');
+  requiredEnv('JWT_SECRET');
   }
-
+  
   return {
     mongoUri: requiredEnv('MONGO_URI'),
     rpcUrl: requiredEnv('RPC_URL'),
@@ -76,6 +81,7 @@ function createApp({ contract, provider, corsOrigins }) {
     standardHeaders: 'draft-8',
     legacyHeaders: false,
   });
+
   const voteLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 20,
@@ -83,6 +89,9 @@ function createApp({ contract, provider, corsOrigins }) {
     legacyHeaders: false,
   });
 
+  app.use('/api/auth', authLimiter, authRoutes);
+  app.use('/api/admin', adminRoutes);
+  app.use('/api/elections', electionRoutes);
   app.get('/health', (_req, res) => {
     res.status(200).json({
       status: 'ok',
